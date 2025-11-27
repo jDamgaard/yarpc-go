@@ -177,9 +177,14 @@ func (o *Outbound) invoke(
 		return err
 	}
 
-	bytes, err := ioutil.ReadAll(request.Body)
-	if err != nil {
-		return err
+	var bytes []byte
+	if bytesProvider, ok := request.Body.(transport.BytesProvider); ok {
+		bytes = bytesProvider.Bytes()
+	} else {
+		bytes, err = ioutil.ReadAll(request.Body)
+		if err != nil {
+			return err
+		}
 	}
 	fullMethod, err := procedureNameToFullMethod(request.Procedure)
 	if err != nil {

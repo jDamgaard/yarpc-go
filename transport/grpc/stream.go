@@ -64,11 +64,18 @@ func (ss *serverStream) Request() *transport.StreamRequest {
 }
 
 func (ss *serverStream) SendMessage(_ context.Context, m *transport.StreamMessage) error {
-	// TODO pool buffers for performance.
-	msg, err := ioutil.ReadAll(m.Body)
-	_ = m.Body.Close()
-	if err != nil {
-		return err
+	var msg []byte
+	var err error
+
+	if bytesProvider, ok := m.Body.(transport.BytesProvider); ok {
+		msg = bytesProvider.Bytes()
+		defer m.Body.Close()
+	} else {
+		msg, err = ioutil.ReadAll(m.Body)
+		defer m.Body.Close()
+		if err != nil {
+			return err
+		}
 	}
 	return toYARPCStreamError(ss.stream.SendMsg(msg))
 }
@@ -128,16 +135,24 @@ func (cs *clientStream) Request() *transport.StreamRequest {
 }
 
 func (cs *clientStream) SendMessage(_ context.Context, m *transport.StreamMessage) error {
-	if cs.closed.Load() { // If the stream is closed, we should not be sending messages on it.
+	if cs.closed.Load() {
 		return io.EOF
 	}
-	// TODO can we make a "Bytes" interface to get direct access to the bytes
-	// (instead of resorting to ReadAll (which is not necessarily performant))
-	msg, err := ioutil.ReadAll(m.Body)
-	_ = m.Body.Close()
-	if err != nil {
-		return toYARPCStreamError(err)
+
+	var msg []byte
+	var err error
+
+	if bytesProvider, ok := m.Body.(transport.BytesProvider); ok {
+		msg = bytesProvider.Bytes()
+		defer m.Body.Close()
+	} else {
+		msg, err = ioutil.ReadAll(m.Body)
+		defer m.Body.Close()
+		if err != nil {
+			return toYARPCStreamError(err)
+		}
 	}
+
 	if err := cs.stream.SendMsg(msg); err != nil {
 		return toYARPCStreamError(cs.closeWithErr(err))
 	}

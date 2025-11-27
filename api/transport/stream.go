@@ -203,3 +203,23 @@ type StreamMessage struct {
 	Body     io.ReadCloser
 	BodySize int
 }
+
+// BytesProvider is an optional interface that StreamMessage.Body can implement
+// to provide direct access to the underlying bytes, avoiding io.ReadAll().
+//
+// This optimization is particularly important for YARPC's gRPC transport, which
+// currently calls io.ReadAll() on the Body. For large messages, io.ReadAll()
+// creates significant allocation overhead due to incremental buffer growth.
+//
+// When implemented by an encoding (e.g., protobuf), this interface allows
+// transports to access the marshaled bytes directly without copying, eliminating
+// the io.ReadAll() overhead that can cause 5-6x allocation amplification.
+type BytesProvider interface {
+	io.ReadCloser
+
+	// Bytes returns the complete message bytes without copying.
+	// If this method is available, transports should use it instead of io.ReadAll.
+	// The returned slice must remain valid until Close() is called.
+	// Callers MUST NOT modify the returned bytes.
+	Bytes() []byte
+}

@@ -59,8 +59,9 @@ func writeToStream(ctx context.Context, stream transport.Stream, message proto.M
 	return stream.SendMessage(
 		ctx,
 		&transport.StreamMessage{
-			Body: readCloser{
+			Body: &bytesReadCloser{
 				Reader: bytes.NewReader(messageData),
+				data:   messageData,
 				closer: cleanup,
 			},
 			BodySize: len(messageData),
@@ -68,12 +69,19 @@ func writeToStream(ctx context.Context, stream transport.Stream, message proto.M
 	)
 }
 
-type readCloser struct {
+type bytesReadCloser struct {
 	*bytes.Reader
+	data   []byte
 	closer func()
 }
 
-func (r readCloser) Close() error {
-	r.closer()
+func (b *bytesReadCloser) Close() error {
+	b.closer()
 	return nil
 }
+
+func (b *bytesReadCloser) Bytes() []byte {
+	return b.data
+}
+
+var _ transport.BytesProvider = (*bytesReadCloser)(nil)
